@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional
-from utils import MCounter
+from picky_bpe.utils import MCounter
 
 
 class Token:

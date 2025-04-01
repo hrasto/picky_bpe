@@ -9,8 +9,8 @@ import argparse
 import time
 import json
 
-from utils import MCounter, WHITESPACE, PAD, UNK, BOS, EOS
-from language import Token, Word
+from picky_bpe.utils import MCounter, WHITESPACE, PAD, UNK, BOS, EOS
+from picky_bpe.language import Token, Word
 
 import logging
 logger = logging.getLogger(__name__)
