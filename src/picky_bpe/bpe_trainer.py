@@ -11,6 +11,7 @@ import json
 
 from picky_bpe.utils import MCounter, WHITESPACE, PAD, UNK, BOS, EOS
 from picky_bpe.language import Token, Word
+import tqdm
 
 import logging
 logger = logging.getLogger(__name__)
@@ -54,15 +55,27 @@ class BPE:
 
     @staticmethod
     def _get_words(file: str) -> list[Word]:
-        logger.info(f'Loading corpus from {file}...')
         start_time = time.time()
         with open(file) as f:
+            logger.info(f'Loading corpus from {file}...')
             counter = MCounter()
             for i, line in enumerate(f):
                 counter.update(line.strip('\n').split())
                 if i > 0 and i % 500000 == 0:
                     logger.info(f'Processed {i} lines.')
             num_lines = i
+        logger.info(
+            f'Loaded {len(counter)} unique words from {num_lines} sentences in {time.time() - start_time:.2f}s.'
+        )
+        return [Word(i, WHITESPACE + word, freq) for i, (word, freq) in enumerate(counter.items())]
+
+    @staticmethod
+    def _get_words_from_string(corpus: str) -> list[Word]:
+        start_time = time.time()
+        counter = MCounter()
+        for i, line in enumerate(corpus.split('\n')):
+            counter.update(line.strip('\n').split())
+        num_lines = i
         logger.info(
             f'Loaded {len(counter)} unique words from {num_lines} sentences in {time.time() - start_time:.2f}s.'
         )
@@ -267,28 +280,39 @@ class BPE:
                            for i, merge in enumerate(self.events) if merge[0] == EventType.SPLIT],
             }, f, indent=4)
 
-    def fit(self, input_file: Union[Path, str], model_file: Union[Path, str], logging_step: int = 200) -> None:
-        words = self._get_words(input_file)
+    def fit(self, input_file: Union[Path, str], model_file: Union[Path, str], logging_step: int = 200, progressbar=False) -> None:
+        try: 
+            words = self._get_words(input_file)
+        except (FileNotFoundError, OSError): 
+            words = self._get_words_from_string(input_file)
+
         self._initialize_vocab(words)
         self._encode_words(words)
         pairs = self._initialize_pairs(words)
         merge_time = []
-        while self.actual_vocab_size < self.desired_vocab_size:
-            start_time = time.time()
-            pair, count = pairs.most_common(1)[0]
-            if count <= 0:
-                logger.info(f'No more pairs to merge. Stopping with vocab size of {self.actual_vocab_size}.')
-                break
-            freq = self._merge_pair(pair, pairs)
-            self.actual_vocab_size += 1
-            merge_time.append(time.time() - start_time)
-            if self.actual_vocab_size % logging_step == 0:
-                logger.info(
-                    f'VOCABULARY SIZE: {self.actual_vocab_size}. '
-                    f'Merged {pair[0].str} + {pair[1].str} with frequency {freq}. '
-                    f'Average merge time {np.mean(merge_time):.2f}s.'
-                )
-                merge_time = []
+        
+        with tqdm.tqdm(total=self.desired_vocab_size, disable=not progressbar, leave=False) as pbar:
+            while self.actual_vocab_size < self.desired_vocab_size:
+                pbar.update(self.actual_vocab_size-pbar.n)
+                start_time = time.time()
+                try: 
+                    pair, count = pairs.most_common(1)[0]
+                except IndexError: 
+                    count = 0 # the next if will break
+
+                if count <= 0:
+                    logger.info(f'No more pairs to merge. Stopping with vocab size of {self.actual_vocab_size}.')
+                    break
+                freq = self._merge_pair(pair, pairs)
+                self.actual_vocab_size += 1
+                merge_time.append(time.time() - start_time)
+                if self.actual_vocab_size % logging_step == 0:
+                    logger.info(
+                        f'VOCABULARY SIZE: {self.actual_vocab_size}. '
+                        f'Merged {pair[0].str} + {pair[1].str} with frequency {freq}. '
+                        f'Average merge time {np.mean(merge_time):.2f}s.'
+                    )
+                    merge_time = []
         self._dump(model_file)
 
 
