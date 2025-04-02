@@ -291,30 +291,30 @@ class BPE:
         pairs = self._initialize_pairs(words)
         merge_time = []
         
-        with tqdm.tqdm(total=self.desired_vocab_size, disable=not progressbar, leave=False) as pbar:
-            while self.actual_vocab_size < self.desired_vocab_size:
-                pbar.update(self.actual_vocab_size-pbar.n)
-                start_time = time.time()
-                try: 
-                    pair, count = pairs.most_common(1)[0]
-                except IndexError: 
-                    count = 0 # the next if will break
+        pbar = tqdm.tqdm(total=self.desired_vocab_size, disable=not progressbar, leave=False)
+        while self.actual_vocab_size < self.desired_vocab_size:
+            pbar.update(self.actual_vocab_size-pbar.n)
+            start_time = time.time()
+            try: 
+                pair, count = pairs.most_common(1)[0]
+            except IndexError: 
+                count = 0 # the next if will break
 
-                if count <= 0:
-                    logger.info(f'No more pairs to merge. Stopping with vocab size of {self.actual_vocab_size}.')
-                    break
-                freq = self._merge_pair(pair, pairs)
-                self.actual_vocab_size += 1
-                merge_time.append(time.time() - start_time)
-                if self.actual_vocab_size % logging_step == 0:
-                    logger.info(
-                        f'VOCABULARY SIZE: {self.actual_vocab_size}. '
-                        f'Merged {pair[0].str} + {pair[1].str} with frequency {freq}. '
-                        f'Average merge time {np.mean(merge_time):.2f}s.'
-                    )
-                    merge_time = []
+            if count <= 0:
+                logger.info(f'No more pairs to merge. Stopping with vocab size of {self.actual_vocab_size}.')
+                break
+            freq = self._merge_pair(pair, pairs)
+            self.actual_vocab_size += 1
+            merge_time.append(time.time() - start_time)
+            if self.actual_vocab_size % logging_step == 0:
+                logger.info(
+                    f'VOCABULARY SIZE: {self.actual_vocab_size}. '
+                    f'Merged {pair[0].str} + {pair[1].str} with frequency {freq}. '
+                    f'Average merge time {np.mean(merge_time):.2f}s.'
+                )
+                merge_time = []
+        pbar.close()
         self._dump(model_file)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
